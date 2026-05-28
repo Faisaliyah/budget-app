@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مدير الميزانية</title>
+
+<link rel="apple-touch-icon" href="https://imgur.com/a/w3uhCGI.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111827">
+
+<style>
+body{margin:0;background:#f6f7fb;color:#172033;font-family:Tahoma,Arial,sans-serif}
+header{background:#111827;color:white;padding:20px}
+main{max-width:1000px;margin:auto;padding:16px}
+.card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;color:#6b7280;font-size:13px;margin-bottom:6px}
+input,select,button{font:inherit}
+input,select{width:100%;padding:11px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;box-sizing:border-box}
+button{border:0;border-radius:10px;padding:11px 14px;cursor:pointer;background:#111827;color:white}
+button.secondary{background:#eef2ff;color:#111827}
+button.danger{background:#fee2e2;color:#991b1b}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.stat{font-size:24px;font-weight:bold}
+.muted{color:#6b7280}
+.cat{border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:white}
+.row{display:flex;justify-content:space-between;gap:10px;margin:7px 0}
+.remain{font-weight:bold;color:#047857}
+.negative{color:#b91c1c}
+.bar{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:12px 0}
+.fill{height:100%;background:#111827}
+table{width:100%;border-collapse:collapse;background:white}
+th,td{border-bottom:1px solid #e5e7eb;padding:9px;text-align:right;font-size:14px}
+dialog{border:0;border-radius:16px;width:min(720px,94vw);padding:16px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px}
+.unpaid{background:#fee2e2;color:#991b1b}
+.paid{background:#dcfce7;color:#166534}
+.typeBadge{background:#eef2ff;color:#3730a3}
+.monthlyBadge{background:#fef3c7;color:#92400e}
+.smallBtn{padding:7px 9px;font-size:13px}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>مدير الميزانية الشهرية</h1>
+<div style="color:#d1d5db">إدارة شهرية للبنود والمصروفات وفواتير الفيزا</div>
+</header>
+
+<main>
+
+<div class="card">
+<h2>إدارة الشهور</h2>
+<label>الشهر الحالي</label>
+<select id="monthSelect"></select>
+
+<div class="actions">
+<button id="newMonthBtn">إنشاء شهر جديد</button>
+<button class="secondary" id="openSummaryBtn">ملخص الشهر</button>
+</div>
+</div>
+
+<div class="grid">
+<div class="card">
+<label>الدخل الشهري</label>
+<input id="income" type="number" inputmode="decimal" placeholder="25000">
+<button id="saveIncomeBtn">حفظ الدخل</button>
+</div>
+
+<div class="card">
+<div class="muted">المتبقي غير الموزع</div>
+<div id="unallocated" class="stat">0</div>
+</div>
+
+<div class="card">
+<div class="muted">إجمالي المصروفات</div>
+<div id="spentTotal" class="stat">0</div>
+</div>
+</div>
+
+<div class="card">
+<h2>فواتير الفيزا والنسخ الاحتياطي</h2>
+<div class="actions">
+<button id="openVisaBillsBtn">فواتير الفيزا</button>
+<button id="exportBackupBtn">تصدير نسخة احتياطية</button>
+<button class="secondary" id="importBackupBtn">استيراد نسخة احتياطية</button>
+</div>
+<input type="file" id="importFileInput" accept=".json" hidden>
+<p id="visaHint" class="muted"></p>
+</div>
+
+<div class="card">
+<h2>إضافة بند</h2>
+
+<label>اسم البند</label>
+<input id="catName" placeholder="اسم البند">
+
+<label>ميزانية البند</label>
+<input id="catBudget" type="number" inputmode="decimal" placeholder="ميزانية البند">
+
+<label>نوع البند</label>
+<select id="catType">
+<option value="permanent">دائم - يترحل للشهر القادم</option>
+<option value="monthly">لهذا الشهر فقط</option>
+</select>
+
+<label>اسم البنك</label>
+<input id="catBank" placeholder="بنك ساب" value="بنك ساب">
+
+<label>الحد الأقصى للرصيد التراكمي</label>
+<input id="catMaxBalance" type="number" inputmode="decimal" placeholder="اختياري">
+
+<label>ملاحظات</label>
+<input id="catNotes" placeholder="ملاحظات اختيارية">
+
+<div class="actions">
+<button id="addCatBtn">إضافة البند</button>
+
+<button class="danger" id="resetBtn">مسح كل البيانات</button>
+</div>
+</div>
+
+<div class="card">
+<h2>البنود</h2>
+<div id="categories" class="grid"></div>
+</div>
+
+<div class="card">
+<h2>العمليات</h2>
+<table>
+<thead>
+<tr>
+<th>التاريخ</th>
+<th>البند</th>
+<th>المبلغ</th>
+<th>الدفع</th>
+<th>الحالة</th>
+<th>إجراء</th>
+</tr>
+</thead>
+<tbody id="txTable"></tbody>
+</table>
+</div>
+
+</main>
+
+<dialog id="expenseDialog">
+<h2 id="expenseDialogTitle">إضافة فاتوره</h2>
+
+<label>البند</label>
+<select id="txCategory"></select>
+
+<label>المبلغ</label>
+<input id="txAmount" type="number" inputmode="decimal" placeholder="المبلغ">
+
+<label>طريقة الدفع</label>
+<select id="txMethod">
+<option>فيزا</option>
+<option>مدى</option>
+<option>كاش</option>
+</select>
+
+<label>حالة العملية</label>
+<select id="txStatus">
+<option value="-">غير مطلوب</option>
+<option value="unpaid">تحتاج سداد</option>
+<option value="paid">مدفوعة</option>
+</select>
+
+<div class="actions">
+<button id="saveTxBtn">حفظ</button>
+<button class="secondary" id="closeExpenseBtn">إغلاق</button>
+</div>
+</dialog>
+
+<dialog id="editCatDialog">
+<h2>تعديل البند</h2>
+
+<input type="hidden" id="editCatId">
+
+<label>اسم البند</label>
+<input id="editCatName">
+
+<label>ميزانية البند</label>
+<input id="editCatBudget" type="number" inputmode="decimal">
+
+<label>نوع البند</label>
+<select id="editCatType">
+<option value="permanent">دائم - يترحل للشهر القادم</option>
+<option value="monthly">لهذا الشهر فقط</option>
+</select>
+
+<label>اسم البنك</label>
+<input id="editCatBank">
+
+<label>الحد الأقصى للرصيد التراكمي</label>
+<input id="editCatMaxBalance" type="number" inputmode="decimal">
+
+<label>ملاحظات</label>
+<input id="editCatNotes">
+
+<div class="actions">
+<button id="saveEditCatBtn">حفظ التعديل</button>
+<button class="secondary" id="closeEditCatBtn">إغلاق</button>
+</div>
+</dialog>
+
+<dialog id="visaDialog">
+<h2>فواتير الفيزا</h2>
+<div id="visaBillsContent"></div>
+<div class="actions">
+<button id="confirmVisaBillsBtn">تأكيد السداد</button>
+<button class="secondary" id="closeVisaBillsBtn">إغلاق</button>
+</div>
+</dialog>
+
+<dialog id="summaryDialog">
+<h2>ملخص البنود</h2>
+
+<label>اختر الشهر</label>
+<select id="summaryMonthSelect"></select>
+
+<div id="summaryContent"></div>
+
+<div class="actions">
+<button class="secondary" id="closeSummaryBtn">إغلاق</button>
+</div>
+</dialog>
+
+<script>
+const KEY = "budget_final_with_backup_v1";
+const $ = id => document.getElementById(id);
+
+let editingTxId = null;
+
+let app = JSON.parse(localStorage.getItem(KEY) || "null");
+
+if(!app){
+  const now = new Date().toISOString().slice(0,7);
+  app = {
+    currentMonth: now,
+    months: {
+      [now]: {
+        name: now,
+        income: 0,
+        categories: [],
+        transactions: []
+      }
+    }
+  };
+}
+
+function save(){
+  localStorage.setItem(KEY, JSON.stringify(app));
+  render();
+}
+
+function month(){
+  return app.months[app.currentMonth];
+}
+
+function getMonth(key){
+  return app.months[key];
+}
+
+function num(v){
+  return Number(String(v || "").replace(/,/g, "")) || 0;
+}
+
+function money(n){
+  return Number(n || 0).toLocaleString("ar-SA") + " ر.س";
+}
+
+function id(){
+  return "id_" + Date.now() + Math.random();
+}
+
+function categoryType(c){
+  return c.type || "permanent";
+}
+
+function spentFor(catId, monthKey = app.currentMonth){
+  return getMonth(monthKey).transactions
+    .filter(t => t.categoryId === catId)
+    .reduce((s,t) => s + t.amount, 0);
+}
+
+function addCategory(){
+  const m = month();
+  const name = $("catName").value.trim();
+  const budget = num($("catBudget").value);
+  const type = $("catType").value;
+  const bank = $("catBank").value.trim() || "بنك ساب";
+  const maxBalance = num($("catMaxBalance").value);
+  const notes = $("catNotes").value.trim();
+
+  if(!name){
+    alert("اكتب اسم البند");
+    return;
+  }
+
+  m.categories.push({
+    id: id(),
+    name,
+    budget,
+    type,
+    bank,
+    maxBalance,
+    notes
+  });
+
+  $("catName").value = "";
+  $("catBudget").value = "";
+  $("catType").value = "permanent";
+  $("catBank").value = "بنك ساب";
+  $("catMaxBalance").value = "";
+  $("catNotes").value = "";
+
+  save();
+}
+
+function openEditCategory(catId){
+  const c = month().categories.find(x => x.id === catId);
+  if(!c) return;
+
+  $("editCatId").value = c.id;
+  $("editCatName").value = c.name;
+  $("editCatBudget").value = c.budget || "";
+  $("editCatType").value = categoryType(c);
+  $("editCatBank").value = c.bank || "بنك ساب";
+  $("editCatMaxBalance").value = c.maxBalance || "";
+  $("editCatNotes").value = c.notes || "";
+
+  $("editCatDialog").showModal();
+}
+
+function saveEditCategory(){
+  const m = month();
+  const catId = $("editCatId").value;
+  const c = m.categories.find(x => x.id === catId);
+
+  if(!c) return;
+
+  const name = $("editCatName").value.trim();
+
+  if(!name){
+    alert("اكتب اسم البند");
+    return;
+  }
+
+  c.name = name;
+  c.budget = num($("editCatBudget").value);
+  c.type = $("editCatType").value;
+  c.bank = $("editCatBank").value.trim() || "بنك ساب";
+  c.maxBalance = num($("editCatMaxBalance").value);
+  c.notes = $("editCatNotes").value.trim();
+
+  $("editCatDialog").close();
+  save();
+}
+
+function deleteCategory(catId){
+  const m = month();
+  const c = m.categories.find(x => x.id === catId);
+
+  if(!c) return;
+
+  const relatedTx = m.transactions.filter(t => t.categoryId === catId).length;
+
+  let msg = "هل تريد حذف هذا البند؟";
+
+  if(relatedTx > 0){
+    msg = "هذا البند عليه عمليات عددها " + relatedTx + ". حذف البند سيحذف عملياته أيضًا. متابعة؟";
+  }
+
+  if(confirm(msg)){
+    m.categories = m.categories.filter(x => x.id !== catId);
+    m.transactions = m.transactions.filter(t => t.categoryId !== catId);
+    save();
+  }
+}
+
+function openExpense(catId){
+  editingTxId = null;
+  const m = month();
+
+  $("expenseDialogTitle").textContent = "إضافة فاتورة";
+
+  $("txCategory").innerHTML = m.categories.map(c =>
+    `<option value="${c.id}">${c.name}</option>`
+  ).join("");
+
+  $("txCategory").value = catId;
+  $("txAmount").value = "";
+  $("txMethod").value = "فيزا";
+  $("txStatus").value = "unpaid";
+
+  $("expenseDialog").showModal();
+}
+
+function openEditExpense(txId){
+  const m = month();
+  const t = m.transactions.find(x => x.id === txId);
+  if(!t) return;
+
+  editingTxId = txId;
+
+  $("expenseDialogTitle").textContent = "تعديل العملية";
+
+  $("txCategory").innerHTML = m.categories.map(c =>
+    `<option value="${c.id}">${c.name}</option>`
+  ).join("");
+
+  $("txCategory").value = t.categoryId;
+  $("txAmount").value = t.amount;
+  $("txMethod").value = t.method;
+  $("txStatus").value = t.status || "-";
+
+  $("expenseDialog").showModal();
+}
+
+function saveExpense(){
+  const m = month();
+  const amount = num($("txAmount").value);
+  const method = $("txMethod").value;
+  let status = $("txStatus").value;
+
+  if(amount <= 0){
+    alert("اكتب مبلغ صحيح");
+    return;
+  }
+
+  if(method === "فيزا" && status === "-"){
+    status = "unpaid";
+  }
+
+  if(method !== "فيزا"){
+    status = "-";
+  }
+
+  if(editingTxId){
+    const t = m.transactions.find(x => x.id === editingTxId);
+    if(t){
+      t.categoryId = $("txCategory").value;
+      t.amount = amount;
+      t.method = method;
+      t.status = status;
+    }
+  }else{
+    m.transactions.push({
+      id: id(),
+      categoryId: $("txCategory").value,
+      amount,
+      method,
+      date: new Date().toISOString().slice(0,10),
+      status
+    });
+  }
+
+  editingTxId = null;
+  $("expenseDialog").close();
+  save();
+}
+
+function deleteExpense(txId){
+  if(confirm("هل تريد حذف هذه العملية؟")){
+    month().transactions = month().transactions.filter(t => t.id !== txId);
+    save();
+  }
+}
+
+function openVisaBills(){
+  const unpaid = month().transactions.filter(t =>
+    t.method === "فيزا" && t.status === "unpaid"
+  );
+
+  if(!unpaid.length){
+    $("visaBillsContent").innerHTML = "لا توجد فواتير غير مسددة";
+    $("visaDialog").showModal();
+    return;
+  }
+
+  const total = unpaid.reduce((s,t) => s + t.amount, 0);
+
+  $("visaBillsContent").innerHTML = `
+    <p><b>إجمالي الفواتير: ${money(total)}</b></p>
+    ${unpaid.map(t => {
+      const cat = month().categories.find(c => c.id === t.categoryId);
+      return `
+        <div class="row">
+          <span>${cat ? cat.name : "-"}</span>
+          <b>${money(t.amount)}</b>
+        </div>
+      `;
+    }).join("")}
+  `;
+
+  $("visaDialog").showModal();
+}
+
+function confirmVisaBills(){
+  month().transactions = month().transactions.map(t => {
+    if(t.method === "فيزا" && t.status === "unpaid"){
+      t.status = "paid";
+      t.paidAt = new Date().toISOString().slice(0,10);
+    }
+    return t;
+  });
+
+  $("visaDialog").close();
+  save();
+}
+
+function createMonth(){
+  const current = app.currentMonth;
+  const parts = current.split("-");
+  const next = new Date(parts[0], parts[1], 1);
+
+  const key =
+    next.getFullYear() + "-" +
+    String(next.getMonth() + 1).padStart(2, "0");
+
+  if(!app.months[key]){
+    app.months[key] = {
+      name: key,
+      income: month().income,
+      categories: month().categories
+        .filter(c => categoryType(c) === "permanent")
+        .map(c => {
+          const spent = spentFor(c.id);
+          const remaining = Math.max(0, c.budget - spent);
+          const maxBalance = c.maxBalance || 0;
+
+          let nextBudget = c.budget + remaining;
+
+          if(maxBalance > 0){
+            nextBudget = Math.min(nextBudget, maxBalance);
+          }
+
+          return {
+            id: id(),
+            name: c.name,
+            budget: nextBudget,
+            carriedBalance: remaining,
+            type: "permanent",
+            bank: c.bank || "بنك ساب",
+            maxBalance: c.maxBalance || 0,
+            notes: c.notes || ""
+          };
+        }),
+      transactions: []
+    };
+  }
+
+  app.currentMonth = key;
+  save();
+}
+function exportBackup(){
+  const dataStr = JSON.stringify(app, null, 2);
+  const blob = new Blob([dataStr], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "budget-backup-" + new Date().toISOString().slice(0,10) + ".json";
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(file){
+  const reader = new FileReader();
+
+  reader.onload = function(e){
+    try{
+      const imported = JSON.parse(e.target.result);
+
+      if(!imported.months || !imported.currentMonth){
+        alert("ملف النسخة الاحتياطية غير صالح");
+        return;
+      }
+
+      if(confirm("سيتم استبدال البيانات الحالية بالنسخة الاحتياطية. متابعة؟")){
+        app = imported;
+        localStorage.setItem(KEY, JSON.stringify(app));
+        render();
+        alert("تم استيراد النسخة الاحتياطية بنجاح");
+      }
+
+    }catch(err){
+      alert("فشل قراءة ملف النسخة الاحتياطية");
+    }
+  };
+
+  reader.readAsText(file);
+}
+
+function resetAll(){
+  if(confirm("سيتم حذف كل البيانات من هذا الجهاز. متابعة؟")){
+    localStorage.removeItem(KEY);
+
+    const now = new Date().toISOString().slice(0,7);
+
+    app = {
+      currentMonth: now,
+      months: {
+        [now]: {
+          name: now,
+          income: 0,
+          categories: [],
+          transactions: []
+        }
+      }
+    };
+
+    render();
+  }
+}
+
+function renderMonths(){
+  const keys = Object.keys(app.months).sort();
+
+  $("monthSelect").innerHTML = keys.map(k =>
+    `<option value="${k}">${app.months[k].name}</option>`
+  ).join("");
+
+  $("monthSelect").value = app.currentMonth;
+
+  $("summaryMonthSelect").innerHTML = keys.map(k =>
+    `<option value="${k}">${app.months[k].name}</option>`
+  ).join("");
+}
+
+function openSummary(){
+  renderMonths();
+  $("summaryMonthSelect").value = app.currentMonth;
+  renderSummary(app.currentMonth);
+  $("summaryDialog").showModal();
+}
+
+function renderSummary(monthKey){
+  const m = getMonth(monthKey);
+
+  if(!m){
+    $("summaryContent").innerHTML = "لا توجد بيانات لهذا الشهر";
+    return;
+  }
+
+  const totalBudget = m.categories.reduce((s,c) => s + c.budget, 0);
+  const totalSpent = m.transactions.reduce((s,t) => s + t.amount, 0);
+  const totalRemain = totalBudget - totalSpent;
+
+  $("summaryContent").innerHTML = `
+    <div class="card">
+      <div class="row"><span>الدخل</span><b>${money(m.income)}</b></div>
+      <div class="row"><span>إجمالي الميزانيات</span><b>${money(totalBudget)}</b></div>
+      <div class="row"><span>إجمالي المصروف</span><b>${money(totalSpent)}</b></div>
+      <div class="row"><span>المتبقي من البنود</span><b>${money(totalRemain)}</b></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>البند</th>
+          <th>الميزانية</th>
+          <th>المصروف</th>
+          <th>المتبقي</th>
+          <th>البنك</th>
+          <th>النوع</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${
+          m.categories.map(c => {
+            const spent = spentFor(c.id, monthKey);
+            const remain = c.budget - spent;
+            return `
+              <tr>
+                <td>${c.name}</td>
+                <td>${money(c.budget)}</td>
+                <td>${money(spent)}</td>
+                <td>${money(remain)}</td>
+                <td>${c.bank || "بنك ساب"}</td>
+                <td>${categoryType(c) === "permanent" ? "دائم" : "شهري فقط"}</td>
+              </tr>
+            `;
+          }).join("")
+        }
+      </tbody>
+    </table>
+  `;
+}
+
+function render(){
+  const m = month();
+
+  renderMonths();
+
+  $("income").value = m.income || "";
+
+  const budgetTotal = m.categories.reduce((s,c) => s + c.budget, 0);
+  const spentTotal = m.transactions.reduce((s,t) => s + t.amount, 0);
+
+  $("unallocated").textContent = money(m.income - budgetTotal);
+  $("spentTotal").textContent = money(spentTotal);
+
+  const unpaid = m.transactions.filter(t =>
+    t.method === "فيزا" && t.status === "unpaid"
+  );
+
+  const unpaidTotal = unpaid.reduce((s,t) => s + t.amount, 0);
+
+  $("visaHint").textContent =
+    unpaidTotal > 0
+      ? "عليك فواتير فيزا: " + money(unpaidTotal)
+      : "لا توجد فواتير غير مسددة";
+
+  $("categories").innerHTML = m.categories.map(c => {
+    const spent = spentFor(c.id);
+    const remain = c.budget - spent;
+    const pct = c.budget ? Math.min(100, (spent / c.budget) * 100) : 0;
+    const type = categoryType(c);
+
+    return `
+      <div class="cat">
+        <h3>${c.name}</h3>
+
+        <p>
+          ${
+            type === "permanent"
+              ? '<span class="badge typeBadge">بند دائم</span>'
+              : '<span class="badge monthlyBadge">لهذا الشهر فقط</span>'
+          }
+        </p>
+
+        <div class="row">
+          <span>الميزانية</span>
+          <b>${money(c.budget)}</b>
+        </div>
+
+        <div class="row">
+          <span>المصروف</span>
+          <b>${money(spent)}</b>
+        </div>
+
+        <div class="row">
+          <span>المتبقي</span>
+          <b class="remain ${remain < 0 ? "negative" : ""}">${money(remain)}</b>
+        </div>
+
+        <div class="row">
+          <span>البنك</span>
+          <b>${c.bank || "بنك ساب"}</b>
+        </div>
+
+        ${
+          c.maxBalance
+          ? `
+            <div class="row">
+              <span>الحد الأقصى التراكمي</span>
+              <b>${money(c.maxBalance)}</b>
+            </div>
+          `
+          : ""
+        }
+
+        ${
+          c.notes
+          ? `<p class="muted">${c.notes}</p>`
+          : ""
+        }
+
+        <div class="bar">
+          <div class="fill" style="width:${pct}%"></div>
+        </div>
+
+        <div class="actions">
+          <button class="smallBtn" onclick="openExpense('${c.id}')">إضافة فاتورة</button>
+          <button class="secondary smallBtn" onclick="openEditCategory('${c.id}')">تعديل</button>
+          <button class="danger smallBtn" onclick="deleteCategory('${c.id}')">حذف</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  $("txTable").innerHTML = m.transactions.map(t => {
+    const cat = m.categories.find(c => c.id === t.categoryId);
+
+    return `
+      <tr>
+        <td>${t.date}</td>
+        <td>${cat ? cat.name : "-"}</td>
+        <td>${money(t.amount)}</td>
+        <td>${t.method}</td>
+        <td>
+          ${
+            t.status === "paid"
+              ? '<span class="badge paid">مدفوعة</span>'
+              : t.status === "unpaid"
+              ? '<span class="badge unpaid">تحتاج سداد</span>'
+              : "-"
+          }
+        </td>
+        <td>
+          <div class="actions">
+            <button class="secondary smallBtn" onclick="openEditExpense('${t.id}')">تعديل</button>
+            <button class="danger smallBtn" onclick="deleteExpense('${t.id}')">حذف</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+window.openExpense = openExpense;
+window.openEditCategory = openEditCategory;
+window.deleteCategory = deleteCategory;
+window.openEditExpense = openEditExpense;
+window.deleteExpense = deleteExpense;
+
+$("saveIncomeBtn").onclick = function(){
+  month().income = num($("income").value);
+  save();
+};
+
+$("addCatBtn").onclick = addCategory;
+$("saveTxBtn").onclick = saveExpense;
+
+$("closeExpenseBtn").onclick = function(){
+  editingTxId = null;
+  $("expenseDialog").close();
+};
+
+$("saveEditCatBtn").onclick = saveEditCategory;
+
+$("closeEditCatBtn").onclick = function(){
+  $("editCatDialog").close();
+};
+
+$("openVisaBillsBtn").onclick = openVisaBills;
+$("confirmVisaBillsBtn").onclick = confirmVisaBills;
+
+$("closeVisaBillsBtn").onclick = function(){
+  $("visaDialog").close();
+};
+
+$("newMonthBtn").onclick = createMonth;
+
+$("monthSelect").onchange = function(){
+  app.currentMonth = this.value;
+  save();
+};
+
+$("exportBackupBtn").onclick = exportBackup;
+
+$("importBackupBtn").onclick = function(){
+  $("importFileInput").click();
+};
+
+$("importFileInput").onchange = function(e){
+  const file = e.target.files[0];
+  if(file){
+    importBackup(file);
+  }
+};
+
+$("resetBtn").onclick = resetAll;
+
+$("openSummaryBtn").onclick = openSummary;
+
+$("summaryMonthSelect").onchange = function(){
+  renderSummary(this.value);
+};
+
+$("closeSummaryBtn").onclick = function(){
+  $("summaryDialog").close();
+};
+
+$("txMethod").onchange = function(){
+  if(this.value === "فيزا"){
+    $("txStatus").value = "unpaid";
+  }else{
+    $("txStatus").value = "-";
+  }
+};
+
+render();
+</script>
+
+</body>
+</html>
